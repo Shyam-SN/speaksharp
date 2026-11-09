@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
+import { useAuth } from '../context/AuthContext.js';
 import { useRecorder } from '../hooks/useRecorder.js';
 import { MicVisualizer } from '../components/MicVisualizer.js';
 import { ProcessingProgress } from '../components/ProcessingProgress.js';
@@ -17,11 +18,18 @@ import {
 
 export const PracticePage: React.FC = () => {
   const navigate = useNavigate();
+  const { isDemo } = useAuth();
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const { data: quota } = useQuery({
+    queryKey: ['quota'],
+    queryFn: () => api.getQuota(),
+    refetchInterval: 10000,
+  });
 
   const {
     isRecording,
@@ -118,9 +126,18 @@ export const PracticePage: React.FC = () => {
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
           Speaking Practice Booth
         </h1>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-600 mb-3">
           Pick a prompt, record your response, and submit to receive instant AI coaching.
         </p>
+
+        {quota && (
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+            <span>
+              Daily Sessions: <strong className="text-sky-700">{quota.remaining} of {quota.limit}</strong> remaining
+            </span>
+            {isDemo && <span className="text-slate-400">· Demo Mode</span>}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

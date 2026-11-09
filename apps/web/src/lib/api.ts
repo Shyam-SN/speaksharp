@@ -87,6 +87,21 @@ class ApiClient {
     return data.sessions;
   }
 
+  async getQuota(): Promise<{
+    limit: number;
+    used: number;
+    remaining: number;
+    resetSeconds: number;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/api/sessions/quota`, {
+      headers: this.getHeaders(),
+    });
+    if (!res.ok) {
+      return { limit: 5, used: 0, remaining: 5, resetSeconds: 86400 };
+    }
+    return res.json();
+  }
+
   async generateTTS(sessionId: string): Promise<string> {
     const res = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/tts`, {
       method: 'POST',

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { randomUUID } from 'crypto';
 import { requireAuth } from '../middleware/auth.js';
-import { checkSessionRateLimit } from '../middleware/rate-limit.js';
+import { checkSessionRateLimit, getRateLimitStatus } from '../middleware/rate-limit.js';
 import { store } from '../lib/store.js';
 import { processSessionPipeline, getComputedMetrics } from '../services/pipeline.js';
 import { generateImprovedTTS } from '../services/tts.js';
@@ -99,6 +99,25 @@ sessionsRouter.post(
         code: 'UPLOAD_FAILED',
       });
     }
+  },
+);
+
+/**
+ * GET /api/sessions/quota
+ * Retrieve current user's remaining daily session allowance
+ */
+sessionsRouter.get(
+  '/quota',
+  requireAuth,
+  (req: Request, res: Response): void => {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+      return;
+    }
+
+    const quota = getRateLimitStatus(user.id, user.isAnonymous);
+    res.status(200).json(quota);
   },
 );
 
