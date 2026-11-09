@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: speaksharp-api
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build --workspace=@speaksharp/shared && npm run build --workspace=@speaksharp/api
+    startCommand: npm run start --workspace=@speaksharp/api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: mock
+      - key: OPENAI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_STT_MODEL
+        value: whisper-1
+      - key: OPENAI_LLM_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_TTS_MODEL
+        value: gpt-4o-mini-tts
+      - key: OPENAI_TTS_VOICE
+        value: nova
+      - key: RATE_LIMIT_PER_DAY
+        value: 20
+      - key: RATE_LIMIT_ANON_PER_DAY
+        value: 5
