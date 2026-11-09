@@ -143,3 +143,4 @@ export async function transcribeAudio(
     return getMockSTT();
   }
 }
+

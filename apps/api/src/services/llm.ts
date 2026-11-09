@@ -171,3 +171,4 @@ Please analyze this speech and provide structured JSON feedback following the re
   logger.warn('Falling back to zero-cost fallback feedback generator');
   return generateMockFeedback(transcriptText, metrics, promptTitle);
 }
+

@@ -37,3 +37,4 @@ export function getSupabaseAdmin(): SupabaseClient | null {
 
   return supabaseAdmin;
 }
+

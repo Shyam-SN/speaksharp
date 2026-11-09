@@ -1,24 +1,44 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider } from './context/AuthContext.js';
+import { Navbar } from './components/Navbar.js';
+import { LandingPage } from './pages/LandingPage.js';
+import { PracticePage } from './pages/PracticePage.js';
+import { ResultsPage } from './pages/ResultsPage.js';
+import { HistoryPage } from './pages/HistoryPage.js';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    },
+  },
+});
 
 export function App(): React.JSX.Element {
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center p-6 text-center">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <div className="w-12 h-12 bg-sky-100 text-sky-600 rounded-xl flex items-center justify-center mx-auto mb-4 font-bold text-xl">
-          SS
-        </div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">SpeakSharp</h1>
-        <p className="text-slate-600 text-sm mb-6">
-          Mini AI Speaking Coach — practice speaking, get instant metrics, and improve with
-          personalized AI coaching.
-        </p>
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-          Scaffold Ready (Milestone 1)
-        </span>
-      </div>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+            <Navbar />
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/practice" element={<PracticePage />} />
+                <Route path="/results/:sessionId" element={<ResultsPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </main>
+          </div>
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
 
 export default App;
-

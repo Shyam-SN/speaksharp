@@ -15,3 +15,4 @@ promptsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Failed to retrieve prompts', code: 'SERVER_ERROR' });
   }
 });
+
