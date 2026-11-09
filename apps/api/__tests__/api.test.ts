@@ -105,6 +105,27 @@ describe('SpeakSharp API Routes (Integration)', () => {
       expect(res.body.sessions.length).toBeGreaterThan(0);
     });
 
+    it('generates and returns cached TTS audio on POST /api/sessions/:id/tts', async () => {
+      // Create session first
+      const mockAudio = Buffer.from('FAKE_AUDIO_FOR_TTS');
+      const upload = await request(app)
+        .post('/api/sessions')
+        .set('Authorization', 'Bearer demo-token')
+        .attach('audio', mockAudio, 'audio.webm');
+
+      const sessionId = upload.body.sessionId;
+      await new Promise((r) => setTimeout(r, 150)); // let pipeline finish
+
+      // Request TTS
+      const ttsRes = await request(app)
+        .post(`/api/sessions/${sessionId}/tts`)
+        .set('Authorization', 'Bearer demo-token');
+
+      expect(ttsRes.status).toBe(200);
+      expect(ttsRes.body).toHaveProperty('ttsAudioUrl');
+      expect(typeof ttsRes.body.ttsAudioUrl).toBe('string');
+    });
+
     it('returns 403 when trying to access another user session', async () => {
       // Upload session as user A
       const mockAudioBuffer = Buffer.from('FAKE_WEBM_DATA');

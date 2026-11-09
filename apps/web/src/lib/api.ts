@@ -86,6 +86,22 @@ class ApiClient {
     const data = (await res.json()) as { sessions: SessionRecord[] };
     return data.sessions;
   }
+
+  async generateTTS(sessionId: string): Promise<string> {
+    const res = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/tts`, {
+      method: 'POST',
+      headers: this.getHeaders('application/json'),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'TTS generation failed' }));
+      throw new Error(err.error || `HTTP ${res.status}: TTS request failed`);
+    }
+
+    const data = (await res.json()) as { ttsAudioUrl: string };
+    return data.ttsAudioUrl;
+  }
 }
 
 export const api = new ApiClient();
+

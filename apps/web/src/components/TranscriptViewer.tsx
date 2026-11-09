@@ -101,3 +101,4 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
     </div>
   );
 };
+

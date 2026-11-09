@@ -35,3 +35,4 @@ export const MicVisualizer: React.FC<MicVisualizerProps> = ({ volume, isRecordin
     </div>
   );
 };
+

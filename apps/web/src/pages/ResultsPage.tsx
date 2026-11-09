@@ -16,12 +16,16 @@ import {
   Target,
   Play,
   Pause,
+  Loader2,
 } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [copied, setCopied] = useState(false);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const ttsAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   const {
     data: detail,
@@ -79,23 +83,58 @@ export const ResultsPage: React.FC = () => {
     }
   };
 
-  const handlePlayTTS = () => {
-    if (!payload?.improvedAnswer) return;
+  const handlePlayTTS = async () => {
+    if (!payload?.improvedAnswer || !sessionId) return;
 
-    if (window.speechSynthesis) {
-      if (isPlayingTTS) {
-        window.speechSynthesis.cancel();
-        setIsPlayingTTS(false);
-      } else {
-        window.speechSynthesis.cancel(); // Reset any existing speech
-        const utterance = new SpeechSynthesisUtterance(payload.improvedAnswer);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.onend = () => setIsPlayingTTS(false);
-        utterance.onerror = () => setIsPlayingTTS(false);
-        setIsPlayingTTS(true);
-        window.speechSynthesis.speak(utterance);
+    if (isPlayingTTS) {
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
       }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsPlayingTTS(false);
+      return;
+    }
+
+    // Try backend cached TTS endpoint first
+    try {
+      setTtsLoading(true);
+      const url = ttsAudioUrl || detail?.ttsAudioUrl || (await api.generateTTS(sessionId));
+      setTtsAudioUrl(url);
+
+      if (url && url !== '/api/audio/' && !url.includes('undefined')) {
+        const audio = new Audio(url);
+        ttsAudioRef.current = audio;
+        audio.onended = () => setIsPlayingTTS(false);
+        audio.onerror = () => {
+          // Fall back cleanly to browser speech synthesis if audio file empty
+          fallbackBrowserTTS();
+        };
+        await audio.play();
+        setIsPlayingTTS(true);
+        setTtsLoading(false);
+        return;
+      }
+    } catch {
+      // Fall back cleanly to browser speech synthesis
+    } finally {
+      setTtsLoading(false);
+    }
+
+    fallbackBrowserTTS();
+  };
+
+  const fallbackBrowserTTS = () => {
+    if (window.speechSynthesis && payload?.improvedAnswer) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(payload.improvedAnswer);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.onend = () => setIsPlayingTTS(false);
+      utterance.onerror = () => setIsPlayingTTS(false);
+      setIsPlayingTTS(true);
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -200,10 +239,16 @@ export const ResultsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePlayTTS}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-sky-700 border border-sky-200 hover:bg-sky-50 shadow-sm flex items-center gap-1.5 transition-colors"
+                disabled={ttsLoading}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-sky-700 border border-sky-200 hover:bg-sky-50 shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 title="Listen to improved version"
               >
-                {isPlayingTTS ? (
+                {ttsLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Loading...</span>
+                  </>
+                ) : isPlayingTTS ? (
                   <>
                     <Pause className="w-3.5 h-3.5 text-sky-700" />
                     <span>Pause</span>
@@ -277,3 +322,4 @@ export const ResultsPage: React.FC = () => {
     </div>
   );
 };
+

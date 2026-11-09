@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { checkSessionRateLimit } from '../middleware/rate-limit.js';
 import { store } from '../lib/store.js';
 import { processSessionPipeline, getComputedMetrics } from '../services/pipeline.js';
+import { generateImprovedTTS } from '../services/tts.js';
 import { logger } from '../lib/logger.js';
 import type { SessionRecord } from '@speaksharp/shared';
 
@@ -97,6 +98,62 @@ sessionsRouter.post(
         error: 'Failed to process audio upload',
         code: 'UPLOAD_FAILED',
       });
+    }
+  },
+);
+
+/**
+ * POST /api/sessions/:id/tts
+ * Generate or return cached TTS audio for the improved answer
+ */
+sessionsRouter.post(
+  '/:id/tts',
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({ error: 'Authentication required', code: 'UNAUTHORIZED' });
+        return;
+      }
+
+      const sessionId = req.params['id'];
+      if (!sessionId || typeof sessionId !== 'string') {
+        res.status(400).json({ error: 'Session ID is required', code: 'INVALID_ID' });
+        return;
+      }
+
+      const session = await store.getSessionById(sessionId);
+      if (!session) {
+        res.status(404).json({ error: 'Session not found', code: 'NOT_FOUND' });
+        return;
+      }
+
+      if (session.user_id !== user.id) {
+        res.status(403).json({ error: 'Access denied to this session', code: 'FORBIDDEN' });
+        return;
+      }
+
+      const feedback = await store.getFeedback(sessionId);
+      if (!feedback?.payload?.improvedAnswer) {
+        res.status(400).json({
+          error: 'Session does not have an improved answer to synthesize',
+          code: 'NO_IMPROVED_ANSWER',
+        });
+        return;
+      }
+
+      const ttsAudioUrl = await generateImprovedTTS(
+        sessionId,
+        feedback.payload.improvedAnswer,
+      );
+
+      res.status(200).json({ ttsAudioUrl });
+    } catch (err) {
+      logger.error('Failed to handle session TTS request', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'TTS generation failed', code: 'TTS_FAILED' });
     }
   },
 );
