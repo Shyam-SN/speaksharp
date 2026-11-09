@@ -2,6 +2,9 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import cors from 'cors';
 import { config } from './lib/config.js';
 import { logger } from './lib/logger.js';
+import { sessionsRouter } from './routes/sessions.js';
+import { promptsRouter } from './routes/prompts.js';
+import { audioRouter } from './routes/audio.js';
 
 export const app = express();
 
@@ -13,6 +16,11 @@ app.use(
 );
 
 app.use(express.json());
+
+// Routes
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/prompts', promptsRouter);
+app.use('/api/audio', audioRouter);
 
 // Healthcheck endpoint
 app.get('/health', (_req: Request, res: Response) => {
@@ -43,4 +51,3 @@ if (process.env['NODE_ENV'] !== 'test') {
     });
   });
 }
-
