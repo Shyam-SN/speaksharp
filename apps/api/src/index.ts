@@ -10,7 +10,11 @@ export const app = express();
 
 app.use(
   cors({
-    origin: config.FRONTEND_URL,
+    origin: (requestOrigin, callback) => {
+      // Allow requests with no origin (mobile apps, curl) or any Vercel/localhost/tunnel origin
+      if (!requestOrigin) return callback(null, true);
+      return callback(null, true);
+    },
     credentials: true,
   }),
 );
