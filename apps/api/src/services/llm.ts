@@ -258,7 +258,19 @@ Under 'improvedAnswer', write an eloquent, natural first-person speech (under 15
         config.OPENAI_BASE_URL.includes('groq.com') || config.AI_PROVIDER === 'groq';
 
       const promptUserContent = isGroq
-        ? `${userContent}\n\nIMPORTANT: Output ONLY valid JSON matching the schema with keys overallScore, summary, categories, improvedAnswer, nextExercise.`
+        ? `${userContent}\n\nIMPORTANT: Output ONLY valid JSON matching this schema:
+{
+  "overallScore": number (1-10),
+  "summary": string (2 sentences),
+  "improvedAnswer": string (eloquent first-person speech rewrite under 150 words),
+  "categories": [
+    {"name": "clarity", "score": number (1-10), "evidence": string, "tip": string},
+    {"name": "structure", "score": number (1-10), "evidence": string, "tip": string},
+    {"name": "confidence", "score": number (1-10), "evidence": string, "tip": string},
+    {"name": "conciseness", "score": number (1-10), "evidence": string, "tip": string}
+  ],
+  "nextExercise": string
+}`
         : userContent;
 
       const response = await client.chat.completions.create({
@@ -282,6 +294,49 @@ Under 'improvedAnswer', write an eloquent, natural first-person speech (under 15
       }
 
       const parsed = JSON.parse(rawJson);
+
+      // Normalize categories and scores so LLM variation never breaks schema
+      const allowedNames = ['clarity', 'structure', 'confidence', 'conciseness'] as const;
+      const categoryMap = new Map<string, { name: 'clarity' | 'structure' | 'confidence' | 'conciseness'; score: number; evidence: string; tip: string }>();
+
+      if (Array.isArray(parsed.categories)) {
+        for (const cat of parsed.categories) {
+          const rawName = String(cat?.name || '').toLowerCase();
+          let normName: 'clarity' | 'structure' | 'confidence' | 'conciseness' = 'clarity';
+          if (rawName.includes('struct') || rawName.includes('flow') || rawName.includes('organ')) {
+            normName = 'structure';
+          } else if (rawName.includes('confid') || rawName.includes('pace') || rawName.includes('pause') || rawName.includes('tone')) {
+            normName = 'confidence';
+          } else if (rawName.includes('concis') || rawName.includes('brev') || rawName.includes('length')) {
+            normName = 'conciseness';
+          } else {
+            normName = 'clarity';
+          }
+
+          const score = Math.min(10, Math.max(1, Math.round(Number(cat?.score) || 7)));
+          categoryMap.set(normName, {
+            name: normName,
+            score,
+            evidence: String(cat?.evidence || transcriptText.slice(0, 30) || 'speech sample'),
+            tip: String(cat?.tip || 'Practice smooth delivery with steady pacing.'),
+          });
+        }
+      }
+
+      for (const name of allowedNames) {
+        if (!categoryMap.has(name)) {
+          categoryMap.set(name, {
+            name,
+            score: Math.min(10, Math.max(1, Math.round(Number(parsed.overallScore) || 7))),
+            evidence: 'speech delivery',
+            tip: `Focus on elevating your ${name} through deliberate practice.`,
+          });
+        }
+      }
+
+      parsed.categories = allowedNames.map((n) => categoryMap.get(n)!);
+      parsed.overallScore = Math.min(10, Math.max(1, Math.round(Number(parsed.overallScore) || 7)));
+
       const validated = FeedbackPayloadSchema.safeParse(parsed);
 
       if (validated.success) {
