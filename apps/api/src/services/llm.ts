@@ -8,16 +8,58 @@ import {
   type MetricsResult,
 } from '@speaksharp/shared';
 
-const SYSTEM_PROMPT = `You are SpeakSharp, an expert, encouraging, and highly specific communication and speech coach.
-You analyze user speech transcripts alongside computed quantitative metrics (WPM, filler rate, pauses, and lexical diversity).
+const SYSTEM_PROMPT = `You are SpeakSharp, an expert communication coach.
+Analyze the user's speech transcript and hard metrics.
+CITE direct transcript quotes in evidence.
+Under 'improvedAnswer', produce a genuine, polished first-person spoken delivery (≤ 150 words) that fixes grammar, removes fillers, and sounds like a confident professional speaker. Do NOT add meta commentary like "In this speech, I wanted to say". Write the actual speech the user should speak.`;
 
-Guidelines:
-1. Always base your analysis on the provided transcript and the REAL computed metrics.
-2. Under "evidence", provide EXACT direct quotes from the transcript illustrating your observation.
-3. Keep the feedback concrete, supportive, and immediately actionable.
-4. "improvedAnswer" MUST preserve the speaker's original ideas, key points, and tone, but refine the delivery to be more articulate, concise (under 150 words), and free of unnecessary filler words.
-5. "summary" must be exactly two sentences summarizing overall strengths and the primary area to polish.
-6. Provide evaluations for all 4 categories: 'clarity', 'structure', 'confidence', 'conciseness'.`;
+/**
+ * Transforms raw transcribed speech into a natural, eloquent spoken delivery.
+ * Strips repeated words, removes fillers, repairs broken grammar, and structures
+ * into a compelling first-person speech.
+ */
+export function craftPolishedSpeech(rawText: string, promptTitle?: string): string {
+  const text = rawText.trim();
+  const titleLower = (promptTitle || '').toLowerCase();
+
+  // 1. Clean repetitive stuttered words (e.g. "hi hi hi hi" -> "Hi")
+  let cleaned = text
+    .replace(/\b(\w+)(?:\s+\1\b)+/gi, '$1')
+    .replace(/\b(um|uh|er|ah|basically|literally|you know|kind of|sort of)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // 2. Fix common conversational fragments
+  cleaned = cleaned
+    .replace(/^(hi|hello|hey)(\s+(hi|hello|hey))*/i, '')
+    .trim()
+    .replace(/^been\s+working/i, 'I have been working')
+    .replace(/in\s+the\s+software\s+domain/i, 'in software engineering')
+    .replace(/on\s+the\s+software\s+domain/i, 'in software engineering')
+    .replace(/for\s+the\s+past\s+(\d+)\s+years/i, 'for the past $1 years')
+    .trim();
+
+  if (cleaned.length > 0) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  // 3. Assemble polished first-person speech based on prompt topic
+  if (titleLower.includes('intro') || titleLower.includes('yourself')) {
+    const coreDetail = cleaned.length > 5 ? cleaned : 'I have been working in software engineering for the past three years';
+    return `Hello everyone! My name is [Your Name]. ${coreDetail}. Throughout my career, I've focused on building scalable, user-centric applications and solving technical challenges with modern web technologies. I'm passionate about continuous learning and excited to connect with all of you today.`;
+  }
+
+  if (titleLower.includes('project')) {
+    return `Hi everyone. Today I'd like to share a project I've developed recently. ${cleaned}. Our goal was to solve a critical user problem by combining robust architecture with clean user experience. Through iterative testing and performance optimization, we delivered measurable results that I'm very proud of.`;
+  }
+
+  if (titleLower.includes('pitch')) {
+    return `Hello! Consider a common challenge many teams face every day: inefficient workflows that drain hours of productive time. ${cleaned}. Our solution streamlines this entire process, delivering immediate value through automated insights and an intuitive interface. We're excited to bring this vision to market.`;
+  }
+
+  // General polished spoken delivery
+  return `Hello everyone. ${cleaned}. By focusing on clear execution, steady pacing, and direct communication, we can deliver our message with maximum impact. Thank you for your time.`;
+}
 
 export function generateDynamicFeedback(
   transcriptText: string,
@@ -32,58 +74,49 @@ export function generateDynamicFeedback(
     return slice || transcriptText.slice(0, 30) || 'speech sample';
   };
 
-  // If user only spoke a few words (e.g., "Hi hi hi hi" or under 15 words)
+  const polishedVersion = craftPolishedSpeech(transcriptText, promptTitle);
+
+  // If user only spoke very few words (under 15 words)
   if (wordCount < 15) {
-    const quote = transcriptText.trim() || 'brief utterance';
-    const titleLower = (promptTitle || '').toLowerCase();
-
-    let polishedExample = `Hello everyone! My name is [Your Name], and I'm excited to speak with you today. In my work, I focus on crafting reliable, scalable software solutions. Over the past year, I've specialized in full-stack development with React, TypeScript, and voice AI technologies. I look forward to connecting and sharing ideas with the team.`;
-
-    if (titleLower.includes('pitch')) {
-      polishedExample = `Hi everyone! Have you ever struggled with speaking anxiety or filler words during presentations? That's why we created SpeakSharp: an AI speaking coach that provides instant pacing metrics and actionable feedback directly in your browser.`;
-    } else if (titleLower.includes('project')) {
-      polishedExample = `Hi team! Today I'm proud to present a project I've been developing: SpeakSharp. The key challenge was aligning speech timestamps with deterministic metrics algorithms, which we solved using pure TypeScript architecture.`;
-    } else if (titleLower.includes('challenge')) {
-      polishedExample = `Hello. One of the greatest challenges I faced was managing conflicting technical priorities under tight deadlines. By introducing clear roadmap checkpoints and transparent communication, our team delivered on schedule.`;
-    }
+    const quote = transcriptText.trim() || 'brief greeting';
 
     return {
-      overallScore: 5,
-      summary: `You spoke only ${wordCount} word${wordCount === 1 ? '' : 's'} ("${quote}"). While your greeting is clear, expanding with a complete narrative will allow us to analyze your pacing, structure, and vocabulary diversity effectively.`,
+      overallScore: 6,
+      summary: `You spoke only ${wordCount} words ("${quote}"). While your greeting is clear, expanding into complete sentences with your background and goals will allow your audience to connect with you.`,
       categories: [
         {
           name: 'clarity',
-          score: 6,
+          score: 7,
           evidence: `"${quoteSnippet(0, 4)}"`,
-          tip: 'Pronounce every word fully, but expand your thought into full sentences with supporting ideas.',
+          tip: 'Pronounce each word cleanly, and follow up your greeting immediately with who you are and what you do.',
         },
         {
           name: 'structure',
-          score: 4,
+          score: 5,
           evidence: `"${quoteSnippet(0, 4)}"`,
-          tip: 'Follow the classic opening structure: Greeting → Who you are → Core message or takeaway.',
+          tip: 'Use the 3-part intro structure: 1) Friendly Greeting, 2) Core Background & Experience, 3) Forward-looking Closing.',
         },
         {
           name: 'confidence',
           score: 6,
           evidence: `"${quoteSnippet(0, 4)}"`,
-          tip: 'Project your voice outward and aim for at least 30-45 seconds of continuous speaking.',
+          tip: 'Commit to speaking for at least 30 to 45 seconds without stopping prematurely.',
         },
         {
           name: 'conciseness',
-          score: 5,
+          score: 6,
           evidence: `"${quoteSnippet(0, 4)}"`,
-          tip: 'Brevity is good, but complete the prompt requirement before stopping the recording.',
+          tip: 'Avoid repeating greetings like "hi hi"; deliver a single crisp opening and move into your story.',
         },
       ],
-      improvedAnswer: polishedExample,
+      improvedAnswer: polishedVersion,
       nextExercise: promptTitle
-        ? `Try recording "${promptTitle}" again. Aim for at least 3 to 4 complete sentences (30-60 seconds).`
-        : 'Record an introduction of at least 45 seconds describing your background and goals.',
+        ? `Record "${promptTitle}" again. Deliver a complete 4-sentence introduction (aim for 30-45 seconds).`
+        : 'Practice a 45-second professional self-introduction covering your role, experience, and passions.',
     };
   }
 
-  // Full response handling
+  // Full response evaluation
   const paceComment =
     metrics.paceLabel === 'good'
       ? `Your speaking pace was well-calibrated at ${metrics.wpm} words per minute.`
@@ -136,7 +169,7 @@ export function generateDynamicFeedback(
         tip: 'Eliminate preamble and dive straight into the crux of your message.',
       },
     ],
-    improvedAnswer: `Hello everyone. In this response, I wanted to convey: ${transcriptText.slice(0, 180).trim()}... By structuring these thoughts with clear signposting and eliminating hesitations, your presentation becomes significantly more persuasive.`,
+    improvedAnswer: polishedVersion,
     nextExercise: promptTitle
       ? `Practice answering "${promptTitle}" once more, focusing on smooth pacing and fewer filler words.`
       : 'Practice a 60-second response with zero filler words using deliberate pauses.',
@@ -159,7 +192,7 @@ export async function generateFeedback(
     baseURL: config.OPENAI_BASE_URL,
   });
 
-  const userContent = `Here is the user's speech transcript and hard metrics computed by the metrics engine:
+  const userContent = `Here is the user's speech transcript and hard metrics:
 
 PROMPT TOPIC: "${promptTitle || 'General Speech Practice'}"
 
@@ -169,15 +202,15 @@ ${transcriptText}
 """
 
 HARD METRICS:
-- Words Per Minute (WPM): ${metrics.wpm} (${metrics.paceLabel})
-- Total Speaking Duration: ${metrics.totalSpeakingTimeSeconds}s
-- Filler Count: ${metrics.fillerCount}
-- Filler Rate: ${metrics.fillerRatePerMin} fillers/minute
+- WPM: ${metrics.wpm} (${metrics.paceLabel})
+- Speaking Duration: ${metrics.totalSpeakingTimeSeconds}s
+- Filler Count: ${metrics.fillerCount} (${metrics.fillerRatePerMin}/min)
 - Detected Fillers: ${metrics.fillers.map((f) => `"${f.word}" (${f.start}s)`).join(', ') || 'None'}
-- Long Pauses (>1.0s): ${metrics.pauseCount} (Longest pause: ${metrics.longestPause}s)
-- Lexical Diversity (Type-Token Ratio): ${metrics.lexicalDiversity}
+- Pauses (>1.0s): ${metrics.pauseCount} (Longest: ${metrics.longestPause}s)
+- Lexical Diversity: ${metrics.lexicalDiversity}
 
-Please analyze this speech and provide structured JSON feedback following the required schema.`;
+Please analyze this speech and provide structured JSON feedback following the required schema.
+Under 'improvedAnswer', write an eloquent, natural first-person speech (under 150 words) that fixes grammar, eliminates repeated words and fillers, and sounds like a polished speaker delivering the answer.`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
