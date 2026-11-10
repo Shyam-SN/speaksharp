@@ -19,15 +19,15 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: AI_PROVIDER
-        value: mock
+        value: groq
       - key: OPENAI_BASE_URL
-        value: https://api.openai.com/v1
+        value: https://api.groq.com/openai/v1
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_STT_MODEL
-        value: whisper-1
+        value: whisper-large-v3
       - key: OPENAI_LLM_MODEL
-        value: gpt-4o-mini
+        value: openai/gpt-oss-120b
       - key: OPENAI_TTS_MODEL
         value: gpt-4o-mini-tts
       - key: OPENAI_TTS_VOICE
