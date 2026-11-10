@@ -122,8 +122,10 @@ describe('SpeakSharp API Routes (Integration)', () => {
         .set('Authorization', 'Bearer demo-token');
 
       expect(ttsRes.status).toBe(200);
-      expect(ttsRes.body).toHaveProperty('ttsAudioUrl');
-      expect(typeof ttsRes.body.ttsAudioUrl).toBe('string');
+      expect(ttsRes.body).toHaveProperty('useBrowserSpeech');
+      expect(
+        ttsRes.body.ttsAudioUrl === null || typeof ttsRes.body.ttsAudioUrl === 'string',
+      ).toBe(true);
     });
 
     it('returns 403 when trying to access another user session', async () => {

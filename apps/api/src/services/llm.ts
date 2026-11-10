@@ -248,16 +248,25 @@ Under 'improvedAnswer', write an eloquent, natural first-person speech (under 15
         model: config.OPENAI_LLM_MODEL,
       });
 
+      const isGroq =
+        config.OPENAI_BASE_URL.includes('groq.com') || config.AI_PROVIDER === 'groq';
+
+      const promptUserContent = isGroq
+        ? `${userContent}\n\nIMPORTANT: Output ONLY valid JSON matching the schema with keys overallScore, summary, categories, improvedAnswer, nextExercise.`
+        : userContent;
+
       const response = await client.chat.completions.create({
-        model: config.OPENAI_LLM_MODEL,
+        model: isGroq ? 'llama-3.3-70b-versatile' : config.OPENAI_LLM_MODEL,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userContent },
+          { role: 'user', content: promptUserContent },
         ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: LLM_FEEDBACK_JSON_SCHEMA,
-        },
+        response_format: isGroq
+          ? { type: 'json_object' }
+          : {
+              type: 'json_schema',
+              json_schema: LLM_FEEDBACK_JSON_SCHEMA,
+            },
         temperature: 0.7,
       });
 

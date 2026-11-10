@@ -105,18 +105,34 @@ export async function transcribeAudio(
       sizeBytes: buffer.length,
     });
 
-    const response = (await client.audio.transcriptions.create({
+    const isGroq =
+      config.OPENAI_BASE_URL.includes('groq.com') || config.AI_PROVIDER === 'groq';
+
+    const transcriptionParams: {
+      file: Awaited<ReturnType<typeof toFile>>;
+      model: string;
+      response_format: 'verbose_json' | 'json';
+      timestamp_granularities?: ('word' | 'segment')[];
+    } = {
       file,
-      model: config.OPENAI_STT_MODEL,
+      model: isGroq ? 'whisper-large-v3' : config.OPENAI_STT_MODEL,
       response_format: 'verbose_json',
-      timestamp_granularities: ['word'],
-    })) as unknown as {
+    };
+
+    if (!isGroq) {
+      transcriptionParams.timestamp_granularities = ['word'];
+    }
+
+    const response = (await client.audio.transcriptions.create(
+      transcriptionParams,
+    )) as unknown as {
       text: string;
       duration?: number;
       words?: Array<{ word: string; start: number; end: number }>;
+      segments?: Array<{ text: string; start: number; end: number }>;
     };
 
-    const words: TranscriptWord[] = (response.words ?? []).map((w) => ({
+    let words: TranscriptWord[] = (response.words ?? []).map((w) => ({
       word: w.word,
       start: typeof w.start === 'number' ? w.start : 0,
       end: typeof w.end === 'number' ? w.end : 0,
@@ -129,6 +145,31 @@ export async function transcribeAudio(
         : words.length > 0
           ? (words[words.length - 1]?.end ?? 0)
           : 0;
+
+    // If provider returned segments or plain text without word-level timestamps (e.g. Groq)
+    if (words.length === 0 && text.trim().length > 0) {
+      if (response.segments && response.segments.length > 0) {
+        for (const seg of response.segments) {
+          const segTokens = seg.text.trim().split(/\s+/).filter(Boolean);
+          const segDuration = Math.max(0.1, (seg.end ?? 0) - (seg.start ?? 0));
+          const step = segDuration / Math.max(1, segTokens.length);
+          segTokens.forEach((token, idx) => {
+            const start = Math.round(((seg.start ?? 0) + idx * step) * 100) / 100;
+            const end = Math.round((start + step * 0.9) * 100) / 100;
+            words.push({ word: token, start, end });
+          });
+        }
+      } else {
+        const rawWords = text.trim().split(/\s+/).filter(Boolean);
+        const totalDuration = duration > 0 ? duration : rawWords.length * 0.4;
+        const step = totalDuration / Math.max(1, rawWords.length);
+        rawWords.forEach((token, idx) => {
+          const start = Math.round((idx * step) * 100) / 100;
+          const end = Math.round((start + step * 0.85) * 100) / 100;
+          words.push({ word: token, start, end });
+        });
+      }
+    }
 
     return {
       text,
