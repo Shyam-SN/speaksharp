@@ -1,7 +1,16 @@
+import path from 'path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
+// Load .env from cwd and workspace folders
 dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'apps/api/.env') });
+
+// Force mock provider during automated test execution
+if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+  process.env.AI_PROVIDER = 'mock';
+}
 
 const envSchema = z.object({
   PORT: z.string().default('3001').transform(Number),
@@ -14,11 +23,13 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().default('mock-service-role-key'),
 
   // AI Provider & models
-  AI_PROVIDER: z.enum(['mock', 'groq', 'openai']).default('mock'),
+  AI_PROVIDER: z
+    .enum(['mock', 'groq', 'openai'])
+    .default(process.env.NODE_ENV === 'test' || process.env.VITEST ? 'mock' : 'mock'),
   OPENAI_BASE_URL: z.string().default('https://api.openai.com/v1'),
   OPENAI_API_KEY: z.string().optional().default(''),
-  OPENAI_STT_MODEL: z.string().default('whisper-1'),
-  OPENAI_LLM_MODEL: z.string().default('gpt-4o-mini'),
+  OPENAI_STT_MODEL: z.string().default('whisper-large-v3'),
+  OPENAI_LLM_MODEL: z.string().default('openai/gpt-oss-120b'),
   OPENAI_TTS_MODEL: z.string().default('gpt-4o-mini-tts'),
   OPENAI_TTS_VOICE: z.string().default('nova'),
 

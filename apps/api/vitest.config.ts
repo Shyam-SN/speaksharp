@@ -5,6 +5,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts', '__tests__/**/*.test.ts'],
+    env: {
+      AI_PROVIDER: 'mock',
+      NODE_ENV: 'test',
+    },
   },
 });
 

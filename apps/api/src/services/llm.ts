@@ -256,7 +256,7 @@ Under 'improvedAnswer', write an eloquent, natural first-person speech (under 15
         : userContent;
 
       const response = await client.chat.completions.create({
-        model: isGroq ? 'llama-3.3-70b-versatile' : config.OPENAI_LLM_MODEL,
+        model: config.OPENAI_LLM_MODEL || (isGroq ? 'openai/gpt-oss-120b' : 'gpt-4o-mini'),
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: promptUserContent },
