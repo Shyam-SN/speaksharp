@@ -268,3 +268,4 @@ npm run lint
 ## 📄 License
 
 MIT License © 2026 SpeakSharp
+

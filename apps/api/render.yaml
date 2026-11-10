@@ -36,3 +36,4 @@ services:
         value: 20
       - key: RATE_LIMIT_ANON_PER_DAY
         value: 5
+

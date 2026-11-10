@@ -16,10 +16,48 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
+const DEFAULT_PROMPTS: Prompt[] = [
+  {
+    id: 'p1-intro',
+    title: 'Introduce yourself in 60 seconds',
+    description: 'Summarize who you are, your background, what drives you, and what you are currently working on.',
+    category: 'Introduction',
+    suggested_seconds: 60,
+  },
+  {
+    id: 'p2-project',
+    title: 'Explain a project you are proud of',
+    description: 'Walk through a technical or creative project: core problem, architectural choices, and measurable impact.',
+    category: 'Technical',
+    suggested_seconds: 90,
+  },
+  {
+    id: 'p3-pitch',
+    title: 'Pitch a startup idea',
+    description: 'Pitch a solution to an unsolved customer problem. State the value proposition, market, and why now.',
+    category: 'Pitch',
+    suggested_seconds: 90,
+  },
+  {
+    id: 'p4-challenge',
+    title: 'Describe your biggest professional challenge',
+    description: 'Share a difficult situation at work or school, how you navigated conflicting priorities, and what you learned.',
+    category: 'Behavioral',
+    suggested_seconds: 90,
+  },
+  {
+    id: 'p5-teach',
+    title: 'Teach a complex concept to a 5-year-old',
+    description: 'Pick an intricate concept (like cloud computing or gravity) and explain it using simple analogies.',
+    category: 'Explanation',
+    suggested_seconds: 60,
+  },
+];
+
 export const PracticePage: React.FC = () => {
   const navigate = useNavigate();
   const { isDemo } = useAuth();
-  const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+  const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(DEFAULT_PROMPTS[0] ?? null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -43,15 +81,17 @@ export const PracticePage: React.FC = () => {
     resetRecording,
   } = useRecorder();
 
-  // Load prompts
-  const { data: prompts, isLoading: promptsLoading } = useQuery({
+  // Load prompts from API, fall back to DEFAULT_PROMPTS
+  const { data: apiPrompts, isLoading: promptsLoading } = useQuery({
     queryKey: ['prompts'],
     queryFn: () => api.getPrompts(),
   });
 
-  // Select first prompt by default once loaded
+  const prompts = apiPrompts && apiPrompts.length > 0 ? apiPrompts : DEFAULT_PROMPTS;
+
+  // Select first prompt if not yet selected
   useEffect(() => {
-    if (prompts && prompts.length > 0 && !selectedPrompt) {
+    if (!selectedPrompt && prompts.length > 0) {
       setSelectedPrompt(prompts[0] ?? null);
     }
   }, [prompts, selectedPrompt]);
@@ -249,6 +289,13 @@ export const PracticePage: React.FC = () => {
               <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-xs flex items-center justify-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{recorderError}</span>
+              </div>
+            )}
+
+            {submitError && (
+              <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{submitError}</span>
               </div>
             )}
           </div>

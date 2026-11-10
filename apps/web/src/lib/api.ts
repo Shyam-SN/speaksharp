@@ -5,7 +5,7 @@ import type {
   CreateSessionResponse,
 } from '@speaksharp/shared';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 class ApiClient {
   private token: string | null = null;
@@ -16,9 +16,8 @@ class ApiClient {
 
   private getHeaders(contentType?: string): HeadersInit {
     const headers: Record<string, string> = {};
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
+    const effectiveToken = this.token || 'demo-token';
+    headers['Authorization'] = `Bearer ${effectiveToken}`;
     if (contentType) {
       headers['Content-Type'] = contentType;
     }
