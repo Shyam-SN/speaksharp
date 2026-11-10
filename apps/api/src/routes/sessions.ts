@@ -179,12 +179,15 @@ sessionsRouter.post(
         return;
       }
 
-      const ttsAudioUrl = await generateImprovedTTS(
+      const result = await generateImprovedTTS(
         sessionId,
         feedback.payload.improvedAnswer,
       );
 
-      res.status(200).json({ ttsAudioUrl });
+      res.status(200).json({
+        ttsAudioUrl: result.url,
+        useBrowserSpeech: result.useBrowserSpeech,
+      });
     } catch (err) {
       logger.error('Failed to handle session TTS request', {
         error: err instanceof Error ? err.message : String(err),

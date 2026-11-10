@@ -109,7 +109,7 @@ class ApiClient {
     return res.json();
   }
 
-  async generateTTS(sessionId: string): Promise<string> {
+  async generateTTS(sessionId: string): Promise<{ ttsAudioUrl: string | null; useBrowserSpeech: boolean }> {
     const res = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/tts`, {
       method: 'POST',
       headers: this.getHeaders('application/json'),
@@ -120,8 +120,7 @@ class ApiClient {
       throw new Error(err.error || `HTTP ${res.status}: TTS request failed`);
     }
 
-    const data = (await res.json()) as { ttsAudioUrl: string };
-    return data.ttsAudioUrl;
+    return (await res.json()) as { ttsAudioUrl: string | null; useBrowserSpeech: boolean };
   }
 }
 

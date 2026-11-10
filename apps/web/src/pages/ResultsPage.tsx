@@ -23,9 +23,19 @@ export const ResultsPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [copied, setCopied] = useState(false);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
-  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
   const [ttsLoading, setTtsLoading] = useState(false);
   const ttsAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  React.useEffect(() => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+    }
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const {
     data: detail,
@@ -83,6 +93,57 @@ export const ResultsPage: React.FC = () => {
     }
   };
 
+  const playSpeechSynthesis = (text: string) => {
+    if (!('speechSynthesis' in window)) {
+      setTtsLoading(false);
+      setIsPlayingTTS(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice =
+      voices.find(
+        (v) =>
+          v.lang.startsWith('en') &&
+          (v.name.includes('Samantha') ||
+            v.name.includes('Natural') ||
+            v.name.includes('Google') ||
+            v.name.includes('Karen') ||
+            v.name.includes('Daniel') ||
+            v.name.includes('Alex')),
+      ) || voices.find((v) => v.lang.startsWith('en'));
+
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onstart = () => {
+      setIsPlayingTTS(true);
+      setTtsLoading(false);
+    };
+
+    utterance.onend = () => {
+      setIsPlayingTTS(false);
+      setTtsLoading(false);
+    };
+
+    utterance.onerror = () => {
+      setIsPlayingTTS(false);
+      setTtsLoading(false);
+    };
+
+    setIsPlayingTTS(true);
+    setTtsLoading(false);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handlePlayTTS = async () => {
     if (!payload?.improvedAnswer || !sessionId) return;
 
@@ -90,52 +151,32 @@ export const ResultsPage: React.FC = () => {
       if (ttsAudioRef.current) {
         ttsAudioRef.current.pause();
       }
-      if (window.speechSynthesis) {
+      if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
       setIsPlayingTTS(false);
       return;
     }
 
-    // Try backend cached TTS endpoint first
     try {
       setTtsLoading(true);
-      const url = ttsAudioUrl || detail?.ttsAudioUrl || (await api.generateTTS(sessionId));
-      setTtsAudioUrl(url);
+      const res = await api.generateTTS(sessionId);
 
-      if (url && url !== '/api/audio/' && !url.includes('undefined')) {
-        const audio = new Audio(url);
+      if (res.ttsAudioUrl && !res.useBrowserSpeech) {
+        const audio = new Audio(res.ttsAudioUrl);
         ttsAudioRef.current = audio;
         audio.onended = () => setIsPlayingTTS(false);
-        audio.onerror = () => {
-          // Fall back cleanly to browser speech synthesis if audio file empty
-          fallbackBrowserTTS();
-        };
+        audio.onerror = () => playSpeechSynthesis(payload.improvedAnswer);
         await audio.play();
         setIsPlayingTTS(true);
         setTtsLoading(false);
         return;
       }
     } catch {
-      // Fall back cleanly to browser speech synthesis
-    } finally {
-      setTtsLoading(false);
+      // Continue to browser synthesis
     }
 
-    fallbackBrowserTTS();
-  };
-
-  const fallbackBrowserTTS = () => {
-    if (window.speechSynthesis && payload?.improvedAnswer) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(payload.improvedAnswer);
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
-      utterance.onend = () => setIsPlayingTTS(false);
-      utterance.onerror = () => setIsPlayingTTS(false);
-      setIsPlayingTTS(true);
-      window.speechSynthesis.speak(utterance);
-    }
+    playSpeechSynthesis(payload.improvedAnswer);
   };
 
   return (

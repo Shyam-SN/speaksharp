@@ -3,38 +3,30 @@ import { config } from '../lib/config.js';
 import { logger } from '../lib/logger.js';
 import { store } from '../lib/store.js';
 
+export interface TTSResult {
+  url: string | null;
+  useBrowserSpeech: boolean;
+}
+
 export async function generateImprovedTTS(
   sessionId: string,
   text: string,
-): Promise<string> {
-  // 1. Check if feedback already has a cached TTS audio path
+): Promise<TTSResult> {
+  // 1. If in mock mode or without an OpenAI key, signal browser synthesis for 100% free high-quality voice
+  if (config.AI_PROVIDER === 'mock' || !config.OPENAI_API_KEY) {
+    logger.info('Using browser-native speech synthesis for zero-cost audio playback', { sessionId });
+    return { url: null, useBrowserSpeech: true };
+  }
+
+  // 2. Check if feedback already has a cached TTS audio path
   const feedback = await store.getFeedback(sessionId);
   if (feedback?.tts_audio_path) {
     logger.info('Returning cached TTS audio URL', { sessionId, path: feedback.tts_audio_path });
-    return store.getAudioSignedUrl(feedback.tts_audio_path);
+    const signedUrl = await store.getAudioSignedUrl(feedback.tts_audio_path);
+    return { url: signedUrl, useBrowserSpeech: false };
   }
 
   const storagePath = `tts/${sessionId}.mp3`;
-
-  // 2. If in mock mode or without an OpenAI key, generate a lightweight MP3 or signal browser synthesis
-  if (config.AI_PROVIDER === 'mock' || !config.OPENAI_API_KEY) {
-    logger.info('Generating zero-cost simulated TTS audio', { sessionId });
-    // Minimal valid silent MP3 frame for offline audio playback
-    const mockMp3Buffer = Buffer.from([
-      0xff, 0xfb, 0x90, 0x44, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]);
-
-    await store.uploadAudio(storagePath, mockMp3Buffer, 'audio/mpeg');
-    if (feedback) {
-      await store.saveFeedback({
-        ...feedback,
-        tts_audio_path: storagePath,
-      });
-    }
-
-    return store.getAudioSignedUrl(storagePath);
-  }
 
   // 3. Call OpenAI TTS API
   try {
@@ -70,15 +62,13 @@ export async function generateImprovedTTS(
       });
     }
 
-    return store.getAudioSignedUrl(storagePath);
+    const signedUrl = await store.getAudioSignedUrl(storagePath);
+    return { url: signedUrl, useBrowserSpeech: false };
   } catch (err) {
-    logger.error('Failed to generate TTS via OpenAI, falling back to cached silent placeholder', {
+    logger.error('Failed to generate TTS via OpenAI, falling back to browser speech synthesis', {
       error: err instanceof Error ? err.message : String(err),
     });
 
-    const fallbackBuffer = Buffer.from([0xff, 0xfb, 0x90, 0x44, 0x00]);
-    await store.uploadAudio(storagePath, fallbackBuffer, 'audio/mpeg');
-    return store.getAudioSignedUrl(storagePath);
+    return { url: null, useBrowserSpeech: true };
   }
 }
-
