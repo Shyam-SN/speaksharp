@@ -5,7 +5,11 @@ import type {
   CreateSessionResponse,
 } from '@speaksharp/shared';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  ''
+).replace(/\/$/, '');
 
 class ApiClient {
   private token: string | null = null;
