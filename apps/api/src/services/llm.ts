@@ -12,21 +12,23 @@ const SYSTEM_PROMPT = `You are SpeakSharp, an expert executive communication and
 Analyze the user's speech transcript and hard metrics.
 CITE direct transcript quotes in evidence.
 
-CRITICAL RULES for 'improvedAnswer':
-1. First-person voice ONLY: Write exactly what the speaker should say out loud (e.g. "Hello everyone, I am Shyam...").
-2. ZERO meta-commentary: NEVER write "In this response, I wanted to say...", "The speaker conveys...", or critique the speaker inside improvedAnswer.
-3. NEVER use placeholders like [Your Name] or [Insert Company]. If the speaker introduces their name in the transcript, use it naturally. If not, write an engaging opening without bracketed placeholders.
-4. Eliminate stammers and stutters (such as repeated "hi hi hi" or "um um") into a single, confident opening.
-5. Elevate clarity and vocabulary while preserving the speaker's true intent, role, and domain facts (keep under 150 words).`;
+CRITICAL RULES FOR 'improvedAnswer':
+1. STRICT CONTENT FIDELITY (ZERO HALLUCINATIONS / NO FICTIONAL FACTS):
+   - ONLY polish what the speaker ACTUALLY said!
+   - NEVER invent jobs, titles (e.g. "marketing strategist", "software engineer"), companies, years of experience, or metrics/achievements that the user did not say in their transcript.
+   - If the user ONLY said greetings or short phrases (e.g. "hi hi hi hi", "hello everyone", "good morning"): ONLY polish it into a clean, confident opening (e.g. "Hello everyone, thank you for having me today."). Do NOT invent a resume, career story, or profession!
+   - When the user shares real content, elevate grammar and structure around THEIR actual words and intent.
+2. First-person voice ONLY: Write exactly what the speaker would say out loud.
+3. ZERO meta-commentary: NEVER write "In this response, I wanted to say...", "The speaker conveys...", or critique the speaker inside improvedAnswer.
+4. Eliminate stammers and stutters: Replace repeated greetings like "hi hi hi hi" with a single crisp greeting ("Hello everyone,").
+5. NEVER include bracketed placeholders like [Your Name]. If a name is mentioned, use it naturally; otherwise speak directly without placeholders.`;
 
 /**
- * Transforms raw transcribed speech into a natural, eloquent spoken delivery.
- * Detects speaker's name, removes repetitive filler words, fixes grammar,
- * and eliminates any template placeholders.
+ * Transforms raw transcribed speech into a natural, eloquent spoken delivery
+ * with strict fidelity to what was actually spoken (zero hallucinated resumes).
  */
-export function craftPolishedSpeech(rawText: string, promptTitle?: string): string {
+export function craftPolishedSpeech(rawText: string, _promptTitle?: string): string {
   const text = rawText.trim();
-  const titleLower = (promptTitle || '').toLowerCase();
 
   // 1. Detect if the user introduced their name ("this is Shyam", "my name is Shyam", "I am Shyam")
   let speakerName: string | null = null;
@@ -55,46 +57,28 @@ export function craftPolishedSpeech(rawText: string, promptTitle?: string): stri
   // Fix common conversational fragments
   cleaned = cleaned
     .replace(/^been\s+working/i, 'I have been working')
-    .replace(/in\s+the\s+software\s+domain/i, 'in software engineering')
-    .replace(/on\s+the\s+software\s+domain/i, 'in software engineering')
-    .replace(/for\s+the\s+past\s+(\d+)\s+years/i, 'for the past $1 years')
     .replace(/^[,.\s]+|[,.\s]+$/g, '')
     .trim();
 
   if (cleaned.length > 0) {
     cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    if (!/[.!?]$/.test(cleaned)) {
+      cleaned += '.';
+    }
   }
 
-  // 3. Assemble personalized first-person speech based on prompt topic
-  if (titleLower.includes('intro') || titleLower.includes('yourself')) {
-    const greeting = speakerName
-      ? `Hello everyone! My name is ${speakerName}.`
-      : `Hello everyone!`;
+  const greeting = speakerName
+    ? `Hello everyone, I'm ${speakerName}.`
+    : `Hello everyone.`;
 
-    const body =
-      cleaned.length > 5
-        ? `${cleaned}.`
-        : `I am a software professional dedicated to building impactful digital solutions and continuous learning.`;
-
-    return `${greeting} ${body} Throughout my journey, I've focused on solving complex challenges and collaborating closely with teams. I'm excited to be here and connect with all of you today.`;
+  // If the user only said greetings and provided no content, do NOT invent a career
+  if (cleaned.length === 0) {
+    return speakerName
+      ? `Hello everyone, I'm ${speakerName}. Thank you for having me today.`
+      : `Hello everyone, thank you for having me today.`;
   }
 
-  if (titleLower.includes('project')) {
-    const intro = speakerName ? `Hi everyone, I'm ${speakerName}.` : `Hi everyone.`;
-    const body = cleaned.length > 5 ? cleaned : `Today I want to present a project I've developed recently`;
-    return `${intro} ${body}. Our core objective was to solve a meaningful user problem with clean architecture, iterative testing, and great user experience. I'm proud of the results we achieved.`;
-  }
-
-  if (titleLower.includes('pitch')) {
-    const intro = speakerName ? `Hello! I'm ${speakerName}.` : `Hello!`;
-    const body = cleaned.length > 5 ? cleaned : `Consider an everyday challenge that costs teams valuable time`;
-    return `${intro} ${body}. Our platform streamlines this entire workflow, unlocking immediate productivity through intuitive, automated tools. We're excited to bring this vision to life.`;
-  }
-
-  // General speech
-  const intro = speakerName ? `Hello everyone, my name is ${speakerName}.` : `Hello everyone.`;
-  const body = cleaned.length > 5 ? `${cleaned}.` : `I'm pleased to share these insights with you.`;
-  return `${intro} ${body} By focusing on clear structure and purposeful pacing, we ensure our ideas resonate with every listener. Thank you.`;
+  return `${greeting} ${cleaned}`;
 }
 
 export function generateDynamicFeedback(
@@ -246,7 +230,8 @@ HARD METRICS:
 - Lexical Diversity: ${metrics.lexicalDiversity}
 
 Please analyze this speech and provide structured JSON feedback following the required schema.
-Under 'improvedAnswer', write an eloquent, natural first-person speech (under 150 words) that fixes grammar, eliminates repeated words and fillers, and sounds like a polished speaker delivering the answer. Never include bracketed placeholders like [Your Name].`;
+Under 'improvedAnswer', write an eloquent, natural first-person speech rewrite (under 150 words) that fixes grammar, eliminates repeated words and fillers, and sounds like a polished speaker.
+CRITICAL: Do NOT invent jobs, professions, company names, or accomplishments not stated in the transcript. If the user only said greetings (e.g. "hi hi hi hi"), ONLY polish the greeting without fabricating a career story! Never include bracketed placeholders like [Your Name].`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
@@ -285,7 +270,7 @@ Under 'improvedAnswer', write an eloquent, natural first-person speech (under 15
               type: 'json_schema',
               json_schema: LLM_FEEDBACK_JSON_SCHEMA,
             },
-        temperature: 0.7,
+        temperature: 0.3,
       });
 
       const rawJson = response.choices[0]?.message?.content;
