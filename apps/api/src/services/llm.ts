@@ -11,54 +11,84 @@ import {
 const SYSTEM_PROMPT = `You are SpeakSharp, an expert communication coach.
 Analyze the user's speech transcript and hard metrics.
 CITE direct transcript quotes in evidence.
-Under 'improvedAnswer', produce a genuine, polished first-person spoken delivery (≤ 150 words) that fixes grammar, removes fillers, and sounds like a confident professional speaker. Do NOT add meta commentary like "In this speech, I wanted to say". Write the actual speech the user should speak.`;
+Under 'improvedAnswer', produce a genuine, polished first-person spoken delivery (≤ 150 words) that fixes grammar, removes fillers, and sounds like a confident professional speaker. Do NOT add meta commentary like "In this speech, I wanted to say". Never use placeholders like [Your Name]; use their actual name if provided or write naturally without placeholders.`;
 
 /**
  * Transforms raw transcribed speech into a natural, eloquent spoken delivery.
- * Strips repeated words, removes fillers, repairs broken grammar, and structures
- * into a compelling first-person speech.
+ * Detects speaker's name, removes repetitive filler words, fixes grammar,
+ * and eliminates any template placeholders.
  */
 export function craftPolishedSpeech(rawText: string, promptTitle?: string): string {
   const text = rawText.trim();
   const titleLower = (promptTitle || '').toLowerCase();
 
-  // 1. Clean repetitive stuttered words (e.g. "hi hi hi hi" -> "Hi")
+  // 1. Detect if the user introduced their name ("this is Shyam", "my name is Shyam", "I am Shyam")
+  let speakerName: string | null = null;
+  const nameMatch = text.match(/\b(?:this is|i am|i'm|my name is|name's)\s+([A-Za-z]+)\b/i);
+  if (nameMatch && nameMatch[1]) {
+    const rawName = nameMatch[1];
+    if (!['a', 'an', 'the', 'working', 'here', 'just', 'ready', 'talking'].includes(rawName.toLowerCase())) {
+      speakerName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+    }
+  }
+
+  // 2. Clean up repetitive stuttering / greetings / fillers
   let cleaned = text
     .replace(/\b(\w+)(?:\s+\1\b)+/gi, '$1')
     .replace(/\b(um|uh|er|ah|basically|literally|you know|kind of|sort of)\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/^(hi|hello|hey)(\s+(hi|hello|hey))*/i, '')
     .trim();
 
-  // 2. Fix common conversational fragments
+  // If a name was introduced, strip the intro clause from the body to avoid repeating
+  if (speakerName) {
+    cleaned = cleaned
+      .replace(new RegExp(`\\b(?:this is|i am|i'm|my name is|name's)\\s+${speakerName}\\b`, 'i'), '')
+      .trim();
+  }
+
+  // Fix common conversational fragments
   cleaned = cleaned
-    .replace(/^(hi|hello|hey)(\s+(hi|hello|hey))*/i, '')
-    .trim()
     .replace(/^been\s+working/i, 'I have been working')
     .replace(/in\s+the\s+software\s+domain/i, 'in software engineering')
     .replace(/on\s+the\s+software\s+domain/i, 'in software engineering')
     .replace(/for\s+the\s+past\s+(\d+)\s+years/i, 'for the past $1 years')
+    .replace(/^[,.\s]+|[,.\s]+$/g, '')
     .trim();
 
   if (cleaned.length > 0) {
     cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
 
-  // 3. Assemble polished first-person speech based on prompt topic
+  // 3. Assemble personalized first-person speech based on prompt topic
   if (titleLower.includes('intro') || titleLower.includes('yourself')) {
-    const coreDetail = cleaned.length > 5 ? cleaned : 'I have been working in software engineering for the past three years';
-    return `Hello everyone! My name is [Your Name]. ${coreDetail}. Throughout my career, I've focused on building scalable, user-centric applications and solving technical challenges with modern web technologies. I'm passionate about continuous learning and excited to connect with all of you today.`;
+    const greeting = speakerName
+      ? `Hello everyone! My name is ${speakerName}.`
+      : `Hello everyone!`;
+
+    const body =
+      cleaned.length > 5
+        ? `${cleaned}.`
+        : `I am a software professional dedicated to building impactful digital solutions and continuous learning.`;
+
+    return `${greeting} ${body} Throughout my journey, I've focused on solving complex challenges and collaborating closely with teams. I'm excited to be here and connect with all of you today.`;
   }
 
   if (titleLower.includes('project')) {
-    return `Hi everyone. Today I'd like to share a project I've developed recently. ${cleaned}. Our goal was to solve a critical user problem by combining robust architecture with clean user experience. Through iterative testing and performance optimization, we delivered measurable results that I'm very proud of.`;
+    const intro = speakerName ? `Hi everyone, I'm ${speakerName}.` : `Hi everyone.`;
+    const body = cleaned.length > 5 ? cleaned : `Today I want to present a project I've developed recently`;
+    return `${intro} ${body}. Our core objective was to solve a meaningful user problem with clean architecture, iterative testing, and great user experience. I'm proud of the results we achieved.`;
   }
 
   if (titleLower.includes('pitch')) {
-    return `Hello! Consider a common challenge many teams face every day: inefficient workflows that drain hours of productive time. ${cleaned}. Our solution streamlines this entire process, delivering immediate value through automated insights and an intuitive interface. We're excited to bring this vision to market.`;
+    const intro = speakerName ? `Hello! I'm ${speakerName}.` : `Hello!`;
+    const body = cleaned.length > 5 ? cleaned : `Consider an everyday challenge that costs teams valuable time`;
+    return `${intro} ${body}. Our platform streamlines this entire workflow, unlocking immediate productivity through intuitive, automated tools. We're excited to bring this vision to life.`;
   }
 
-  // General polished spoken delivery
-  return `Hello everyone. ${cleaned}. By focusing on clear execution, steady pacing, and direct communication, we can deliver our message with maximum impact. Thank you for your time.`;
+  // General speech
+  const intro = speakerName ? `Hello everyone, my name is ${speakerName}.` : `Hello everyone.`;
+  const body = cleaned.length > 5 ? `${cleaned}.` : `I'm pleased to share these insights with you.`;
+  return `${intro} ${body} By focusing on clear structure and purposeful pacing, we ensure our ideas resonate with every listener. Thank you.`;
 }
 
 export function generateDynamicFeedback(
@@ -210,7 +240,7 @@ HARD METRICS:
 - Lexical Diversity: ${metrics.lexicalDiversity}
 
 Please analyze this speech and provide structured JSON feedback following the required schema.
-Under 'improvedAnswer', write an eloquent, natural first-person speech (under 150 words) that fixes grammar, eliminates repeated words and fillers, and sounds like a polished speaker delivering the answer.`;
+Under 'improvedAnswer', write an eloquent, natural first-person speech (under 150 words) that fixes grammar, eliminates repeated words and fillers, and sounds like a polished speaker delivering the answer. Never include bracketed placeholders like [Your Name].`;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
