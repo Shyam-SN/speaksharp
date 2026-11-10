@@ -8,10 +8,16 @@ import {
   type MetricsResult,
 } from '@speaksharp/shared';
 
-const SYSTEM_PROMPT = `You are SpeakSharp, an expert communication coach.
+const SYSTEM_PROMPT = `You are SpeakSharp, an expert executive communication and speaking coach.
 Analyze the user's speech transcript and hard metrics.
 CITE direct transcript quotes in evidence.
-Under 'improvedAnswer', produce a genuine, polished first-person spoken delivery (≤ 150 words) that fixes grammar, removes fillers, and sounds like a confident professional speaker. Do NOT add meta commentary like "In this speech, I wanted to say". Never use placeholders like [Your Name]; use their actual name if provided or write naturally without placeholders.`;
+
+CRITICAL RULES for 'improvedAnswer':
+1. First-person voice ONLY: Write exactly what the speaker should say out loud (e.g. "Hello everyone, I am Shyam...").
+2. ZERO meta-commentary: NEVER write "In this response, I wanted to say...", "The speaker conveys...", or critique the speaker inside improvedAnswer.
+3. NEVER use placeholders like [Your Name] or [Insert Company]. If the speaker introduces their name in the transcript, use it naturally. If not, write an engaging opening without bracketed placeholders.
+4. Eliminate stammers and stutters (such as repeated "hi hi hi" or "um um") into a single, confident opening.
+5. Elevate clarity and vocabulary while preserving the speaker's true intent, role, and domain facts (keep under 150 words).`;
 
 /**
  * Transforms raw transcribed speech into a natural, eloquent spoken delivery.
@@ -279,7 +285,17 @@ Under 'improvedAnswer', write an eloquent, natural first-person speech (under 15
       const validated = FeedbackPayloadSchema.safeParse(parsed);
 
       if (validated.success) {
-        return validated.data;
+        // Strip any accidental bracket placeholders the LLM might have introduced
+        const sanitizedAnswer = validated.data.improvedAnswer
+          .replace(/\[(?:Your\s*Name|Name)\]/gi, '')
+          .replace(/\[[^\]]+\]/g, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+
+        return {
+          ...validated.data,
+          improvedAnswer: sanitizedAnswer || validated.data.improvedAnswer,
+        };
       }
 
       logger.warn('LLM structured feedback failed Zod schema validation', {
