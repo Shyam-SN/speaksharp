@@ -2,7 +2,7 @@ import { store } from '../lib/store.js';
 import { logger } from '../lib/logger.js';
 import { transcribeAudio } from './stt.js';
 import { generateFeedback } from './llm.js';
-import { computeMetrics, type MetricsResult } from '@speaksharp/shared';
+import { computeMetrics, type MetricsResult, type TranscriptWord } from '@speaksharp/shared';
 
 // In-memory cache for full computed metrics (includes filler/pause detail arrays)
 const computedMetricsCache = new Map<string, MetricsResult>();
@@ -16,13 +16,29 @@ export async function processSessionPipeline(
   audioBuffer: Buffer,
   mimeType: string,
   promptId?: string | null,
+  clientWords?: TranscriptWord[],
+  clientText?: string,
 ): Promise<void> {
   logger.info('Starting session analysis pipeline', { sessionId, mimeType });
 
   try {
-    // 1. STT Transcription
+    // 1. STT Transcription (use client-transcribed words from microphone or call STT)
     logger.info('Pipeline step 1: Transcribing audio', { sessionId });
-    const sttResult = await transcribeAudio(audioBuffer, mimeType);
+    let sttResult;
+
+    if (clientWords && clientWords.length > 0) {
+      logger.info('Using real-time captured words from client', {
+        sessionId,
+        wordCount: clientWords.length,
+      });
+      sttResult = {
+        text: clientText || clientWords.map((w) => w.word).join(' '),
+        words: clientWords,
+        duration: clientWords[clientWords.length - 1]?.end ?? 0,
+      };
+    } else {
+      sttResult = await transcribeAudio(audioBuffer, mimeType);
+    }
 
     await store.saveTranscript({
       session_id: sessionId,
@@ -86,4 +102,3 @@ export async function processSessionPipeline(
     });
   }
 }
-

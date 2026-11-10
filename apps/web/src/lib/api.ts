@@ -38,12 +38,20 @@ class ApiClient {
   async createSession(
     audioBlob: Blob,
     promptId?: string | null,
+    transcriptWords?: Array<{ word: string; start: number; end: number }>,
+    transcriptText?: string,
   ): Promise<CreateSessionResponse> {
     const formData = new FormData();
     const filename = audioBlob.type.includes('mp4') ? 'speech.mp4' : 'speech.webm';
     formData.append('audio', audioBlob, filename);
     if (promptId) {
       formData.append('promptId', promptId);
+    }
+    if (transcriptWords && transcriptWords.length > 0) {
+      formData.append('words', JSON.stringify(transcriptWords));
+    }
+    if (transcriptText) {
+      formData.append('text', transcriptText);
     }
 
     const res = await fetch(`${API_BASE_URL}/api/sessions`, {

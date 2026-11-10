@@ -54,6 +54,17 @@ sessionsRouter.post(
       }
 
       const promptId = typeof req.body.promptId === 'string' ? req.body.promptId : null;
+      let clientWords: import('@speaksharp/shared').TranscriptWord[] | undefined;
+      const clientText = typeof req.body.text === 'string' ? req.body.text : undefined;
+
+      if (typeof req.body.words === 'string') {
+        try {
+          clientWords = JSON.parse(req.body.words);
+        } catch {
+          // ignore parsing error
+        }
+      }
+
       const sessionId = randomUUID();
       const ext = req.file.mimetype.includes('mp4') ? 'mp4' : 'webm';
       const storagePath = `audio/${user.id}/${sessionId}.${ext}`;
@@ -76,8 +87,14 @@ sessionsRouter.post(
       await store.createSession(newSession);
 
       // Launch async pipeline in background
-      processSessionPipeline(sessionId, req.file.buffer, req.file.mimetype, promptId).catch(
-        (err) => {
+      processSessionPipeline(
+        sessionId,
+        req.file.buffer,
+        req.file.mimetype,
+        promptId,
+        clientWords,
+        clientText,
+      ).catch((err) => {
           logger.error('Unhandled pipeline background error', {
             sessionId,
             error: err instanceof Error ? err.message : String(err),

@@ -75,6 +75,8 @@ export const PracticePage: React.FC = () => {
     volumeLevel,
     audioBlob,
     audioUrl,
+    transcriptWords,
+    liveTranscript,
     error: recorderError,
     startRecording,
     stopRecording,
@@ -137,7 +139,12 @@ export const PracticePage: React.FC = () => {
     setSubmitError(null);
 
     try {
-      const res = await api.createSession(audioBlob, selectedPrompt?.id ?? null);
+      const res = await api.createSession(
+        audioBlob,
+        selectedPrompt?.id ?? null,
+        transcriptWords.length > 0 ? transcriptWords : undefined,
+        liveTranscript || undefined,
+      );
       setActiveSessionId(res.sessionId);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Upload failed');

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import type { TranscriptWord } from '@speaksharp/shared';
 
 export interface UseRecorderResult {
   isRecording: boolean;
@@ -7,6 +8,8 @@ export interface UseRecorderResult {
   audioBlob: Blob | null;
   audioUrl: string | null;
   selectedMimeType: string;
+  transcriptWords: TranscriptWord[];
+  liveTranscript: string;
   error: string | null;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
@@ -15,9 +18,7 @@ export interface UseRecorderResult {
 
 const MAX_DURATION_SECONDS = 120; // 2 minutes max
 
-/**
- * Detects the best supported audio MIME type across browsers (Chrome, Firefox, Safari iOS).
- */
+// Audio MIME type cross-browser detection
 export function getSupportedMimeType(): string {
   if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') {
     return 'audio/webm';
@@ -41,6 +42,32 @@ export function getSupportedMimeType(): string {
   return ''; // Browser default
 }
 
+// Browser SpeechRecognition definition
+interface IWindowSpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      isFinal: boolean;
+      [index: number]: {
+        transcript: string;
+        confidence: number;
+      };
+    };
+  };
+}
+
 export function useRecorder(): UseRecorderResult {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -48,6 +75,8 @@ export function useRecorder(): UseRecorderResult {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [selectedMimeType, setSelectedMimeType] = useState<string>('');
+  const [transcriptWords, setTranscriptWords] = useState<TranscriptWord[]>([]);
+  const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -57,6 +86,9 @@ export function useRecorder(): UseRecorderResult {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<IWindowSpeechRecognition | null>(null);
+  const speechStartTimeRef = useRef<number>(0);
+  const wordsAccumulatorRef = useRef<TranscriptWord[]>([]);
 
   const cleanupAudioNodes = useCallback(() => {
     if (animFrameRef.current) {
@@ -70,6 +102,14 @@ export function useRecorder(): UseRecorderResult {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Ignore if already stopped
+      }
+      recognitionRef.current = null;
     }
     setVolumeLevel(0);
   }, []);
@@ -97,6 +137,9 @@ export function useRecorder(): UseRecorderResult {
     }
     setRecordingDuration(0);
     audioChunksRef.current = [];
+    wordsAccumulatorRef.current = [];
+    setTranscriptWords([]);
+    setLiveTranscript('');
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -110,7 +153,9 @@ export function useRecorder(): UseRecorderResult {
       mediaStreamRef.current = stream;
 
       // Audio analysis for volume meter
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
 
@@ -126,17 +171,15 @@ export function useRecorder(): UseRecorderResult {
       const updateVolume = () => {
         if (!analyserRef.current) return;
         analyserRef.current.getByteFrequencyData(dataArray);
-        // Calculate average amplitude
         const sum = dataArray.reduce((acc, val) => acc + val, 0);
         const avg = sum / dataArray.length;
-        // Normalize roughly between 0 and 100
         const normalized = Math.min(100, Math.round((avg / 128) * 100));
         setVolumeLevel(normalized);
         animFrameRef.current = requestAnimationFrame(updateVolume);
       };
       updateVolume();
 
-      // Configure MediaRecorder with cross-browser MIME type
+      // Configure MediaRecorder
       const mimeType = getSupportedMimeType();
       setSelectedMimeType(mimeType);
 
@@ -159,16 +202,70 @@ export function useRecorder(): UseRecorderResult {
         setAudioUrl(newUrl);
       };
 
-      recorder.start(250); // Slice every 250ms
+      speechStartTimeRef.current = Date.now();
+
+      // Native browser speech recognition for real voice transcription
+      const SpeechRecognitionClass =
+        (window as unknown as { SpeechRecognition?: new () => IWindowSpeechRecognition }).SpeechRecognition ||
+        (window as unknown as { webkitSpeechRecognition?: new () => IWindowSpeechRecognition }).webkitSpeechRecognition;
+
+      if (SpeechRecognitionClass) {
+        try {
+          const recognition = new SpeechRecognitionClass();
+          recognition.continuous = true;
+          recognition.interimResults = false;
+          recognition.lang = 'en-US';
+
+          recognition.onresult = (event: SpeechRecognitionEvent) => {
+            const results = event.results;
+            let fullText = '';
+            for (let i = 0; i < results.length; i++) {
+              const res = results[i];
+              if (res && res[0]) {
+                const phrase = res[0].transcript.trim();
+                fullText += (fullText ? ' ' : '') + phrase;
+
+                // Split into word tokens with timestamps
+                const nowSec = (Date.now() - speechStartTimeRef.current) / 1000;
+                const tokens = phrase.split(/\s+/).filter(Boolean);
+                const step = 0.35;
+                const phraseStart = Math.max(0, nowSec - tokens.length * step);
+
+                tokens.forEach((token, tIdx) => {
+                  const start = Math.round((phraseStart + tIdx * step) * 100) / 100;
+                  const end = Math.round((start + 0.3) * 100) / 100;
+                  wordsAccumulatorRef.current.push({
+                    word: token,
+                    start,
+                    end,
+                  });
+                });
+              }
+            }
+
+            setLiveTranscript(fullText);
+            setTranscriptWords([...wordsAccumulatorRef.current]);
+          };
+
+          recognition.onerror = () => {
+            // Speech recognition non-fatal error
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch {
+          // Browser speech recognition not supported or blocked
+        }
+      }
+
+      recorder.start(250);
       setIsRecording(true);
 
-      // Start duration counter
       const startTime = Date.now();
       timerIntervalRef.current = window.setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         setRecordingDuration(elapsed);
 
-        // Auto-stop at max limit (120s)
         if (elapsed >= MAX_DURATION_SECONDS) {
           stopRecording();
         }
@@ -191,6 +288,9 @@ export function useRecorder(): UseRecorderResult {
     setRecordingDuration(0);
     setError(null);
     audioChunksRef.current = [];
+    wordsAccumulatorRef.current = [];
+    setTranscriptWords([]);
+    setLiveTranscript('');
   }, [audioUrl, stopRecording]);
 
   useEffect(() => {
@@ -209,10 +309,11 @@ export function useRecorder(): UseRecorderResult {
     audioBlob,
     audioUrl,
     selectedMimeType,
+    transcriptWords,
+    liveTranscript,
     error,
     startRecording,
     stopRecording,
     resetRecording,
   };
 }
-
