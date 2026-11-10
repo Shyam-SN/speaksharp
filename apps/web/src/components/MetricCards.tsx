@@ -7,11 +7,13 @@ interface MetricCardsProps {
 }
 
 export const MetricCards: React.FC<MetricCardsProps> = ({ metrics }) => {
-  const paceBadgeStyles = {
+  const paceMap: Record<string, string> = {
     'too slow': 'bg-amber-100 text-amber-800 border-amber-200',
     good: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     'too fast': 'bg-rose-100 text-rose-800 border-rose-200',
-  }[metrics.paceLabel];
+  };
+  const paceBadgeStyles =
+    paceMap[metrics.paceLabel] ?? 'bg-slate-100 text-slate-800 border-slate-200';
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

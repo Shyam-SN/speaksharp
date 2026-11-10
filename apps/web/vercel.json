@@ -1,6 +1,7 @@
 {
-  "buildCommand": "npm run build --workspace=@speaksharp/web",
-  "outputDirectory": "apps/web/dist",
+  "buildCommand": "npm run build --workspace=@speaksharp/shared && npm run build --workspace=@speaksharp/web",
+  "outputDirectory": "dist",
+  "framework": "vite",
   "rewrites": [
     {
       "source": "/(.*)",
@@ -8,4 +9,3 @@
     }
   ]
 }
-

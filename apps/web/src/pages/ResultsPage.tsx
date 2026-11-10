@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import type { FeedbackCategory } from '@speaksharp/shared';
 import { api } from '../lib/api.js';
 import { MetricCards } from '../components/MetricCards.js';
 import { TranscriptViewer } from '../components/TranscriptViewer.js';
@@ -260,7 +261,7 @@ export const ResultsPage: React.FC = () => {
             <span className="text-xs text-slate-500 font-medium">Scored 1-10 with Quotes</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {payload.categories.map((cat) => (
+            {payload.categories.map((cat: FeedbackCategory) => (
               <FeedbackCategoryCard key={cat.name} category={cat} />
             ))}
           </div>
