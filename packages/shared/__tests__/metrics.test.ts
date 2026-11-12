@@ -6,6 +6,7 @@ import {
   computeLexicalDiversity,
   computePaceLabel,
   normalizeToken,
+  checkTranscriptCoverage,
 } from '../src/metrics.js';
 import type { TranscriptWord } from '../src/types.js';
 
@@ -325,6 +326,35 @@ describe('Metrics Engine', () => {
       // Rate per min > 0
       expect(result.fillerRatePerMin).toBeGreaterThan(0);
       expect(result.lexicalDiversity).toBeGreaterThan(0.5);
+    });
+  });
+
+  describe('Transcript Coverage Check', () => {
+    it('23. flags coverage warning when transcript covers <70% of recording (>15s)', () => {
+      // 60s recording with only 11.5s transcribed (19% coverage) -> warning triggered
+      const result = checkTranscriptCoverage(60.0, 11.5);
+      expect(result.coverageWarning).toBe(true);
+      expect(result.coverageRatio).toBe(0.19);
+    });
+
+    it('24. does not flag warning when transcript covers >=70% of recording', () => {
+      // 60s recording with 52s transcribed (87% coverage) -> normal
+      const result = checkTranscriptCoverage(60.0, 52.0);
+      expect(result.coverageWarning).toBe(false);
+      expect(result.coverageRatio).toBe(0.87);
+    });
+
+    it('25. does not flag warning for short recordings <= 15s even with brief speech', () => {
+      // 10s recording with 3s speech (30% coverage) -> no warning because <= 15s
+      const result = checkTranscriptCoverage(10.0, 3.0);
+      expect(result.coverageWarning).toBe(false);
+      expect(result.coverageRatio).toBe(0.3);
+    });
+
+    it('26. handles zero or negative duration safely', () => {
+      const result = checkTranscriptCoverage(0, 0);
+      expect(result.coverageWarning).toBe(false);
+      expect(result.coverageRatio).toBe(1);
     });
   });
 });

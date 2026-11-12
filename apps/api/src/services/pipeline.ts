@@ -1,8 +1,12 @@
 import { store } from '../lib/store.js';
 import { logger } from '../lib/logger.js';
-import { transcribeAudio } from './stt.js';
+import * as stt from './stt.js';
 import { generateFeedback } from './llm.js';
-import { computeMetrics, type MetricsResult, type TranscriptWord } from '@speaksharp/shared';
+import {
+  computeMetrics,
+  checkTranscriptCoverage,
+  type MetricsResult,
+} from '@speaksharp/shared';
 
 // In-memory cache for full computed metrics (includes filler/pause detail arrays)
 const computedMetricsCache = new Map<string, MetricsResult>();
@@ -16,29 +20,18 @@ export async function processSessionPipeline(
   audioBuffer: Buffer,
   mimeType: string,
   promptId?: string | null,
-  clientWords?: TranscriptWord[],
-  clientText?: string,
+  clientDurationMs?: number,
 ): Promise<void> {
-  logger.info('Starting session analysis pipeline', { sessionId, mimeType });
+  logger.info('Starting session analysis pipeline', {
+    sessionId,
+    mimeType,
+    clientDurationMs,
+  });
 
   try {
-    // 1. STT Transcription (use client-transcribed words from microphone or call STT)
-    logger.info('Pipeline step 1: Transcribing audio', { sessionId });
-    let sttResult;
-
-    if (clientWords && clientWords.length > 0) {
-      logger.info('Using real-time captured words from client', {
-        sessionId,
-        wordCount: clientWords.length,
-      });
-      sttResult = {
-        text: clientText || clientWords.map((w) => w.word).join(' '),
-        words: clientWords,
-        duration: clientWords[clientWords.length - 1]?.end ?? 0,
-      };
-    } else {
-      sttResult = await transcribeAudio(audioBuffer, mimeType);
-    }
+    // 1. STT Transcription - Server-side Whisper is the ONLY source of truth
+    logger.info('Pipeline step 1: Transcribing audio via server-side Whisper', { sessionId });
+    const sttResult = await stt.transcribeAudio(audioBuffer, mimeType);
 
     await store.saveTranscript({
       session_id: sessionId,
@@ -61,10 +54,35 @@ export async function processSessionPipeline(
       lexical_diversity: metrics.lexicalDiversity,
     });
 
-    // 3. Prompt Lookup for Context
+    // 3. Transcript Coverage Check
+    const recordingDurationSec =
+      typeof clientDurationMs === 'number' && clientDurationMs > 0
+        ? clientDurationMs / 1000
+        : sttResult.duration;
+
+    const transcriptLastWordEnd =
+      sttResult.words.length > 0
+        ? (sttResult.words[sttResult.words.length - 1]?.end ?? 0)
+        : sttResult.duration;
+
+    const { coverageWarning, coverageRatio } = checkTranscriptCoverage(
+      recordingDurationSec,
+      transcriptLastWordEnd,
+    );
+
+    if (coverageWarning) {
+      logger.warn('Transcript coverage warning: less than 70% of audio captured', {
+        sessionId,
+        recordingDurationSec,
+        transcriptLastWordEnd,
+        coverageRatio,
+      });
+    }
+
+    // 4. Prompt Lookup for Context
     const prompt = promptId ? await store.getPromptById(promptId) : null;
 
-    // 4. LLM Feedback
+    // 5. LLM Feedback
     logger.info('Pipeline step 3: Generating AI coaching feedback', { sessionId });
     const feedbackPayload = await generateFeedback(
       sttResult.text,
@@ -79,10 +97,12 @@ export async function processSessionPipeline(
       tts_audio_path: null,
     });
 
-    // 5. Complete session
+    // 6. Complete session
     await store.updateSession(sessionId, {
       status: 'complete',
-      duration_sec: metrics.totalSpeakingTimeSeconds || sttResult.duration,
+      duration_sec: metrics.totalSpeakingTimeSeconds || transcriptLastWordEnd,
+      recording_duration_sec: Math.round(recordingDurationSec * 10) / 10,
+      coverage_warning: coverageWarning,
       error: null,
     });
 
@@ -91,6 +111,8 @@ export async function processSessionPipeline(
       overallScore: feedbackPayload.overallScore,
       wpm: metrics.wpm,
       fillerCount: metrics.fillerCount,
+      recordingDurationSec,
+      coverageWarning,
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);

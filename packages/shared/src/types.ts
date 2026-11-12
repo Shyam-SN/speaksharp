@@ -70,6 +70,8 @@ export interface SessionRecord {
   prompt_id: string | null;
   audio_path: string | null;
   duration_sec: number | null;
+  recording_duration_sec?: number | null;
+  coverage_warning?: boolean;
   status: SessionStatus;
   error: string | null;
   created_at: string;

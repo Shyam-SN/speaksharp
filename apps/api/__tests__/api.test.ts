@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
+import fs from 'fs';
+import path from 'path';
 import { app } from '../src/index.js';
 import { resetRateLimits } from '../src/middleware/rate-limit.js';
+import * as stt from '../src/services/stt.js';
 
 describe('SpeakSharp API Routes (Integration)', () => {
   beforeEach(() => {
@@ -41,6 +44,17 @@ describe('SpeakSharp API Routes (Integration)', () => {
         .set('Authorization', 'Bearer demo-token');
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('MISSING_FILE');
+    });
+
+    it('returns 400 when uploaded audio file exceeds 25MB limit', async () => {
+      const hugeBuffer = Buffer.alloc(25 * 1024 * 1024 + 1);
+      const res = await request(app)
+        .post('/api/sessions')
+        .set('Authorization', 'Bearer demo-token')
+        .attach('audio', hugeBuffer, 'huge.wav');
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('FILE_TOO_LARGE');
     });
   });
 
@@ -93,6 +107,99 @@ describe('SpeakSharp API Routes (Integration)', () => {
       expect(detailRes.body.feedback.overall_score).toBeLessThanOrEqual(10);
       expect(detailRes.body.feedback.payload.categories.length).toBe(4);
       expect(detailRes.body.feedback.payload.improvedAnswer).toBeTruthy();
+    });
+
+    it('processes 60-second audio fixture, ignores client words, and computes >50s speaking time', async () => {
+      const fixturePath = path.resolve(__dirname, 'fixtures/60s_speech.wav');
+      expect(fs.existsSync(fixturePath)).toBe(true);
+      const fixtureBuffer = fs.readFileSync(fixturePath);
+
+      // Generate 60s of word timestamps (55s of speaking time: 1.0s to 56.0s)
+      const mock60sWords = Array.from({ length: 110 }, (_, i) => ({
+        word: i === 0 ? 'Welcome' : i === 50 ? 'basically' : `word${i}`,
+        start: 1.0 + i * 0.5,
+        end: 1.0 + i * 0.5 + 0.35,
+      }));
+
+      const spy = vi.spyOn(stt, 'transcribeAudio').mockResolvedValueOnce({
+        text: mock60sWords.map((w) => w.word).join(' '),
+        words: mock60sWords,
+        duration: 57.0,
+      });
+
+      // Upload with fake client words and clientDurationMs = 60000
+      const uploadRes = await request(app)
+        .post('/api/sessions')
+        .set('Authorization', 'Bearer demo-token')
+        .field('clientDurationMs', '60000')
+        .field('words', JSON.stringify([{ word: 'fake_client_truncated', start: 0, end: 11.5 }]))
+        .field('text', 'fake client text')
+        .attach('audio', fixtureBuffer, {
+          filename: '60s_speech.wav',
+          contentType: 'audio/wav',
+        });
+
+      expect(uploadRes.status).toBe(202);
+      const sessionId = uploadRes.body.sessionId;
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const detailRes = await request(app)
+        .get(`/api/sessions/${sessionId}`)
+        .set('Authorization', 'Bearer demo-token');
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.session.status).toBe('complete');
+
+      // Assert server-side STT was used and client words were completely ignored
+      expect(detailRes.body.transcript.text).not.toContain('fake_client_truncated');
+      expect(detailRes.body.transcript.text).toContain('Welcome');
+
+      // Assert total speaking time is > 50s
+      expect(detailRes.body.metrics.totalSpeakingTimeSeconds).toBeGreaterThan(50);
+      expect(detailRes.body.session.recording_duration_sec).toBe(60);
+      expect(detailRes.body.session.coverage_warning).toBe(false);
+
+      spy.mockRestore();
+    });
+
+    it('flags coverage_warning when 60s recording only has 11.5s transcript', async () => {
+      const mockAudio = Buffer.from('SHORT_TRANSCRIPT_TEST_AUDIO');
+
+      // Mock STT returning only 11.5 seconds of speech
+      const spy = vi.spyOn(stt, 'transcribeAudio').mockResolvedValueOnce({
+        text: 'hello short answer only',
+        words: [
+          { word: 'hello', start: 1.0, end: 1.5 },
+          { word: 'short', start: 1.6, end: 2.0 },
+          { word: 'answer', start: 2.1, end: 3.0 },
+          { word: 'only', start: 11.0, end: 11.5 },
+        ],
+        duration: 11.5,
+      });
+
+      const uploadRes = await request(app)
+        .post('/api/sessions')
+        .set('Authorization', 'Bearer demo-token')
+        .field('clientDurationMs', '60000') // 60 seconds
+        .attach('audio', mockAudio, 'test.webm');
+
+      expect(uploadRes.status).toBe(202);
+      const sessionId = uploadRes.body.sessionId;
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const detailRes = await request(app)
+        .get(`/api/sessions/${sessionId}`)
+        .set('Authorization', 'Bearer demo-token');
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.session.status).toBe('complete');
+      expect(detailRes.body.session.recording_duration_sec).toBe(60);
+      // 11.5s / 60s = 19% coverage (<70%) -> coverage_warning must be true!
+      expect(detailRes.body.session.coverage_warning).toBe(true);
+
+      spy.mockRestore();
     });
 
     it('returns user session list on GET /api/sessions', async () => {

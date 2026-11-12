@@ -98,6 +98,8 @@ export const store = {
         prompt_id: session.prompt_id,
         audio_path: session.audio_path,
         duration_sec: session.duration_sec,
+        recording_duration_sec: session.recording_duration_sec,
+        coverage_warning: session.coverage_warning,
         status: session.status,
         error: session.error,
         created_at: session.created_at,

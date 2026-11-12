@@ -38,6 +38,13 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Centralized error handler
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err && typeof err === 'object' && 'name' in err && err.name === 'MulterError') {
+    res.status(400).json({
+      error: 'Audio file exceeds maximum size limit of 25MB.',
+      code: 'FILE_TOO_LARGE',
+    });
+    return;
+  }
   const message = err instanceof Error ? err.message : 'Internal Server Error';
   logger.error('Unhandled request error', { error: message });
   res.status(500).json({

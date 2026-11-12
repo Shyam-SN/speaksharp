@@ -4,9 +4,13 @@ import { Gauge, AlertCircle, PauseCircle, BookOpen, Clock } from 'lucide-react';
 
 interface MetricCardsProps {
   metrics: MetricsResult;
+  recordingDurationSec?: number | null;
 }
 
-export const MetricCards: React.FC<MetricCardsProps> = ({ metrics }) => {
+export const MetricCards: React.FC<MetricCardsProps> = ({
+  metrics,
+  recordingDurationSec,
+}) => {
   const paceMap: Record<string, string> = {
     'too slow': 'bg-amber-100 text-amber-800 border-amber-200',
     good: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -80,7 +84,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ metrics }) => {
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Vocabulary
+            Vocabulary & Time
           </span>
           <BookOpen className="w-4 h-4 text-emerald-600" />
         </div>
@@ -88,9 +92,17 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ metrics }) => {
           <div className="text-2xl sm:text-3xl font-extrabold text-slate-900">
             {Math.round(metrics.lexicalDiversity * 100)}%
           </div>
-          <p className="mt-1 text-xs text-slate-500 flex items-center gap-1">
-            <Clock className="w-3 h-3" /> {metrics.totalSpeakingTimeSeconds}s total
-          </p>
+          <div className="mt-1 text-xs text-slate-500 space-y-0.5">
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3 text-sky-600" />
+              <span>Speaking: <strong>{metrics.totalSpeakingTimeSeconds}s</strong></span>
+            </div>
+            {typeof recordingDurationSec === 'number' && recordingDurationSec > 0 && (
+              <div className="text-[11px] text-slate-400">
+                Recording: {recordingDurationSec}s
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

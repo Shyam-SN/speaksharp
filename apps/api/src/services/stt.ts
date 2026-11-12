@@ -12,7 +12,7 @@ export interface STTResult {
 /**
  * Realistic mock transcript with word-level timestamps for offline zero-cost demo.
  */
-function getMockSTT(): STTResult {
+export function getMockSTT(): STTResult {
   const wordsRaw = [
     { word: 'Um,', start: 0.8, end: 1.2 },
     { word: 'hello', start: 1.3, end: 1.7 },
@@ -113,15 +113,16 @@ export async function transcribeAudio(
       model: string;
       response_format: 'verbose_json' | 'json';
       timestamp_granularities?: ('word' | 'segment')[];
+      language?: string;
+      prompt?: string;
     } = {
       file,
       model: isGroq ? 'whisper-large-v3' : config.OPENAI_STT_MODEL,
       response_format: 'verbose_json',
+      timestamp_granularities: ['word'],
+      language: 'en',
+      prompt: 'Um, uh, like, you know, so, I mean.',
     };
-
-    if (!isGroq) {
-      transcriptionParams.timestamp_granularities = ['word'];
-    }
 
     const response = (await client.audio.transcriptions.create(
       transcriptionParams,
@@ -132,7 +133,7 @@ export async function transcribeAudio(
       segments?: Array<{ text: string; start: number; end: number }>;
     };
 
-    let words: TranscriptWord[] = (response.words ?? []).map((w) => ({
+    const words: TranscriptWord[] = (response.words ?? []).map((w) => ({
       word: w.word,
       start: typeof w.start === 'number' ? w.start : 0,
       end: typeof w.end === 'number' ? w.end : 0,

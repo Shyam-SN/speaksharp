@@ -72,11 +72,10 @@ export const PracticePage: React.FC = () => {
   const {
     isRecording,
     recordingDuration,
+    recordingDurationMs,
     volumeLevel,
     audioBlob,
     audioUrl,
-    transcriptWords,
-    liveTranscript,
     error: recorderError,
     startRecording,
     stopRecording,
@@ -139,11 +138,12 @@ export const PracticePage: React.FC = () => {
     setSubmitError(null);
 
     try {
+      const clientDuration =
+        recordingDurationMs > 0 ? recordingDurationMs : recordingDuration * 1000;
       const res = await api.createSession(
         audioBlob,
         selectedPrompt?.id ?? null,
-        transcriptWords.length > 0 ? transcriptWords : undefined,
-        liveTranscript || undefined,
+        clientDuration,
       );
       setActiveSessionId(res.sessionId);
     } catch (err) {

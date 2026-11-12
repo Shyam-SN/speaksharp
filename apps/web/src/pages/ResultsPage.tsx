@@ -18,6 +18,7 @@ import {
   Play,
   Pause,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const ResultsPage: React.FC = () => {
@@ -225,6 +226,19 @@ export const ResultsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Incomplete Coverage Warning */}
+      {session?.coverage_warning && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3 shadow-sm">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm font-bold">Partial transcription detected</div>
+            <div className="text-xs text-amber-700 mt-0.5">
+              Part of your recording may not have been transcribed. Try again closer to the mic.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Original Audio Player */}
       {audioUrl && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -235,7 +249,10 @@ export const ResultsPage: React.FC = () => {
             <div>
               <div className="text-xs font-semibold uppercase text-slate-400">Original Audio</div>
               <div className="text-sm font-bold text-slate-800">
-                Your Recorded Answer ({metrics?.totalSpeakingTimeSeconds ?? 0}s)
+                Recording: {session?.recording_duration_sec ?? metrics?.totalSpeakingTimeSeconds ?? 0}s
+                <span className="text-xs font-normal text-slate-500 ml-2">
+                  (Speaking time: {metrics?.totalSpeakingTimeSeconds ?? 0}s, excluding silence)
+                </span>
               </div>
             </div>
           </div>
@@ -247,7 +264,10 @@ export const ResultsPage: React.FC = () => {
       {metrics && (
         <div className="mb-8">
           <h2 className="text-base font-bold text-slate-900 mb-3">Hard Metrics Computed</h2>
-          <MetricCards metrics={metrics} />
+          <MetricCards
+            metrics={metrics}
+            recordingDurationSec={session?.recording_duration_sec}
+          />
         </div>
       )}
 

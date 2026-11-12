@@ -53,17 +53,22 @@ sessionsRouter.post(
         return;
       }
 
-      const promptId = typeof req.body.promptId === 'string' ? req.body.promptId : null;
-      let clientWords: import('@speaksharp/shared').TranscriptWord[] | undefined;
-      const clientText = typeof req.body.text === 'string' ? req.body.text : undefined;
-
-      if (typeof req.body.words === 'string') {
-        try {
-          clientWords = JSON.parse(req.body.words);
-        } catch {
-          // ignore parsing error
-        }
+      // Max audio size validation (25MB limit for transcription providers)
+      if (req.file.size > 25 * 1024 * 1024) {
+        res.status(400).json({
+          error: 'Audio file exceeds maximum size limit of 25MB.',
+          code: 'FILE_TOO_LARGE',
+        });
+        return;
       }
+
+      const promptId = typeof req.body.promptId === 'string' ? req.body.promptId : null;
+      const clientDurationMs =
+        typeof req.body.clientDurationMs === 'string'
+          ? parseFloat(req.body.clientDurationMs)
+          : typeof req.body.clientDurationMs === 'number'
+            ? req.body.clientDurationMs
+            : undefined;
 
       const sessionId = randomUUID();
       const ext = req.file.mimetype.includes('mp4') ? 'mp4' : 'webm';
@@ -79,6 +84,11 @@ sessionsRouter.post(
         prompt_id: promptId,
         audio_path: storagePath,
         duration_sec: null,
+        recording_duration_sec:
+          typeof clientDurationMs === 'number' && clientDurationMs > 0
+            ? Math.round((clientDurationMs / 1000) * 10) / 10
+            : null,
+        coverage_warning: false,
         status: 'processing',
         error: null,
         created_at: new Date().toISOString(),
@@ -86,14 +96,13 @@ sessionsRouter.post(
 
       await store.createSession(newSession);
 
-      // Launch async pipeline in background
+      // Launch async pipeline in background (Server-side Whisper is the ONLY source of truth)
       processSessionPipeline(
         sessionId,
         req.file.buffer,
         req.file.mimetype,
         promptId,
-        clientWords,
-        clientText,
+        clientDurationMs,
       ).catch((err) => {
           logger.error('Unhandled pipeline background error', {
             sessionId,

@@ -326,3 +326,20 @@ export function computeMetrics(
     pauses,
   };
 }
+
+/**
+ * Evaluates whether speech transcription adequately covered the audio recording.
+ * Flagged if transcript covers < 70% of recording duration for recordings > 15 seconds.
+ */
+export function checkTranscriptCoverage(
+  recordingDurationSec: number,
+  transcriptDurationSec: number,
+): { coverageWarning: boolean; coverageRatio: number } {
+  if (recordingDurationSec <= 0) {
+    return { coverageWarning: false, coverageRatio: 1 };
+  }
+  const ratio = Math.max(0, transcriptDurationSec / recordingDurationSec);
+  const coverageRatio = Math.round(ratio * 100) / 100;
+  const coverageWarning = recordingDurationSec > 15 && ratio < 0.7;
+  return { coverageWarning, coverageRatio };
+}
